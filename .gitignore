@@ -1,0 +1,6 @@
+venv/
+_pycache_/
+*.pyc 
+.env
+app.db
+uploads/
