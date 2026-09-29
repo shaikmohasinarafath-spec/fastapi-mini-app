@@ -1,6 +1,9 @@
 from pathlib import Path
 
 import fitz
+import pytesseract
+from pdf2image import convert_from_path
+
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
@@ -12,8 +15,17 @@ from auth import (
     verify_password,
     verify_token,
 )
-from database import Base, SessionLocal, engine, get_db
+from database import Base, engine, get_db
 from models import Material, User
+
+
+# --------------------------------------------------
+# TESSERACT OCR CONFIGURATION
+# --------------------------------------------------
+
+pytesseract.pytesseract.tesseract_cmd = (
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+)
 
 
 # --------------------------------------------------
@@ -27,7 +39,9 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 Base.metadata.create_all(bind=engine)
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/auth/login"
+)
 
 
 # --------------------------------------------------
@@ -77,7 +91,9 @@ def get_current_user(
             detail="Invalid token"
         )
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(
+        User.id == user_id
+    ).first()
 
     if not user:
         raise HTTPException(
@@ -109,8 +125,8 @@ def create_user(
     db: Session = Depends(get_db)
 ):
     existing_user = db.query(User).filter(
-        (User.username == user_data.username) |
-        (User.email == user_data.email)
+        (User.username == user_data.username)
+        | (User.email == user_data.email)
     ).first()
 
     if existing_user:
@@ -122,7 +138,9 @@ def create_user(
     user = User(
         username=user_data.username,
         email=user_data.email,
-        hashed_password=hash_password(user_data.password)
+        hashed_password=hash_password(
+            user_data.password
+        )
     )
 
     db.add(user)
@@ -200,7 +218,10 @@ async def upload_material(
     safe_filename = Path(file.filename).name
 
     # Add user ID to avoid filename conflicts
-    file_path = UPLOAD_DIR / f"{current_user.id}_{safe_filename}"
+    file_path = (
+        UPLOAD_DIR
+        / f"{current_user.id}_{safe_filename}"
+    )
 
     content = await file.read()
 
@@ -230,13 +251,17 @@ async def upload_material(
 
 
 # --------------------------------------------------
-# PDF TEXT EXTRACTION
+# PDF TEXT EXTRACTION + OCR
 # --------------------------------------------------
 
 def extract_pdf_text(pdf_path: str) -> str:
     text_parts = []
 
     try:
+        # --------------------------------------------------
+        # STEP 1: NORMAL PDF TEXT EXTRACTION
+        # --------------------------------------------------
+
         document = fitz.open(pdf_path)
 
         for page in document:
@@ -247,13 +272,39 @@ def extract_pdf_text(pdf_path: str) -> str:
 
         document.close()
 
+        extracted_text = "\n".join(
+            text_parts
+        ).strip()
+
+        # If normal text exists, return it
+        if extracted_text:
+            return extracted_text
+
+        # --------------------------------------------------
+        # STEP 2: OCR FALLBACK
+        # For scanned/image-based PDFs
+        # --------------------------------------------------
+
+        images = convert_from_path(
+            pdf_path,
+            dpi=200
+        )
+
+        for image in images:
+            ocr_text = pytesseract.image_to_string(
+                image
+            )
+
+            if ocr_text.strip():
+                text_parts.append(ocr_text)
+
+        return "\n".join(text_parts).strip()
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Could not read PDF: {str(e)}"
         )
-
-    return "\n".join(text_parts).strip()
 
 
 # --------------------------------------------------
@@ -277,7 +328,9 @@ def create_summary(
             detail="Material not found"
         )
 
-    text = extract_pdf_text(material.filepath)
+    text = extract_pdf_text(
+        material.filepath
+    )
 
     if not text:
         raise HTTPException(
@@ -288,7 +341,9 @@ def create_summary(
     material.extracted_text = text
 
     # Simple local summary
-    clean_text = " ".join(text.split())
+    clean_text = " ".join(
+        text.split()
+    )
 
     sentences = [
         sentence.strip()
@@ -296,7 +351,9 @@ def create_summary(
         if sentence.strip()
     ]
 
-    summary = ". ".join(sentences[:5])
+    summary = ". ".join(
+        sentences[:5]
+    )
 
     if summary:
         summary += "."
@@ -336,7 +393,9 @@ def create_quiz(
     text = material.extracted_text
 
     if not text:
-        text = extract_pdf_text(material.filepath)
+        text = extract_pdf_text(
+            material.filepath
+        )
 
     if not text:
         raise HTTPException(
@@ -345,9 +404,15 @@ def create_quiz(
         )
 
     words = [
-        word.strip(".,!?;:()[]{}")
+        word.strip(
+            ".,!?;:()[]{}"
+        )
         for word in text.split()
-        if len(word.strip(".,!?;:()[]{}")) > 5
+        if len(
+            word.strip(
+                ".,!?;:()[]{}"
+            )
+        ) > 5
     ]
 
     questions = []
@@ -355,8 +420,8 @@ def create_quiz(
     for word in words[:5]:
         questions.append({
             "question": (
-                f"What is the significance of '{word}' "
-                "in the material?"
+                f"What is the significance of "
+                f"'{word}' in the material?"
             ),
             "answer": word
         })
