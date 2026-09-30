@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyMate AI - Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>📚 StudyMate AI</h1>
+        <p>Welcome to your study dashboard</p>
+
+        <div class="card">
+            <h2>Upload Study Material</h2>
+
+            <input type="file" id="pdfFile" accept=".pdf">
+
+            <button onclick="uploadPDF()">
+                Upload PDF
+            </button>
+
+            <p id="uploadMessage"></p>
+        </div>
+
+        <div class="card">
+
+            <h2>Material Actions</h2>
+
+            <button onclick="generateSummary()">
+                Generate Summary
+            </button>
+
+            <button onclick="generateQuiz()">
+                Generate Quiz
+            </button>
+
+            <div id="result"></div>
+
+        </div>
+
+        <button onclick="logout()">
+            Logout
+        </button>
+
+    </div>
+
+    <script src="dashboard.js"></script>
+
+</body>
+</html>

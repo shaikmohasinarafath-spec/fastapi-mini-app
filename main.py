@@ -4,8 +4,18 @@ import fitz
 import pytesseract
 from pdf2image import convert_from_path
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+)
+
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -15,24 +25,26 @@ from auth import (
     verify_password,
     verify_token,
 )
+
 from database import Base, engine, get_db
 from models import Material, User
 
 
-# --------------------------------------------------
-# TESSERACT OCR CONFIGURATION
-# --------------------------------------------------
+app = FastAPI(title="FastAPI Mini App")
 
-pytesseract.pytesseract.tesseract_cmd = (
-    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+    ],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-
-# --------------------------------------------------
-# APP SETUP
-# --------------------------------------------------
-
-app = FastAPI(title="FastAPI Mini App")
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -161,11 +173,11 @@ def create_user(
 
 @app.post("/auth/login")
 def login(
-    login_data: LoginRequest,
+    form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
     user = db.query(User).filter(
-        User.username == login_data.username
+        User.username == form_data.username
     ).first()
 
     if not user:
@@ -175,7 +187,7 @@ def login(
         )
 
     if not verify_password(
-        login_data.password,
+        form_data.password,
         user.hashed_password
     ):
         raise HTTPException(
